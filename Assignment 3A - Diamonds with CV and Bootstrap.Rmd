@@ -1,0 +1,292 @@
+---
+title: "Assignment 3A - Diamonds with CV and Bootstrap"
+author: "Israel Martinez"
+date: "11/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+#setwd("C:/Users/ISRAEL/Documents/MQIM Program/MBA6636-Business #Analytics/Assignments/Assignment 01")
+
+library("dplyr")
+library("ggplot2")
+#library("tidymodels")
+library("Hmisc")
+library("stringr")
+library("corrplot")
+library("broom")
+library("ggfortify")
+library("readr")
+library("tidyverse")
+library("olsrr")
+library("rsample")
+library("caret")
+
+
+```
+
+## Executive summary
+A professor wants to buy a diamond ring for engagement, but he does not know if he will be paying a fair price for the ring of his interest. To ensure that he will be not cheated on the price, he decides to build his own pricing model. For this,  he collects information from three different wholesaler websites, containing the main characteristics of 440 diamonds rings: carat, cut, color, clarity, polish, symmetry, certification, and price. In Assignment 01, I proposed two linear regression models for predicting wholesale prices of diamond rings. Both models were trained and tested using the classical validation set approach, with an 80-20 split. In this assignment, I will use two well-known resampling techniques, bootstrap and cross-validation, for the training of one of the models.  A performance comparison among the different techniques is presented.   
+
+
+
+## 1. Data Preparation
+All collected information was obtained from "MBA6636_SM21_Professor_Proposes_Data.csv" file. Details for data preparation can be consulted in the previous Assignment's report.
+
+
+```{r data preparation, echo=FALSE, results='hide', warning=FALSE}
+
+#diamondsDB <- read.csv("MBA6636_SM21_Professor_Proposes_Data.csv#", header=TRUE)
+
+diamondsDB <- read.csv("https://raw.githubusercontent.com/Andaer01/Assignment01-Bussiness-Analytics/main/MBA6636_SM21_Professor_Proposes_Data.csv", header=TRUE)
+
+
+dim(diamondsDB)
+diamondsDB <- na.omit(diamondsDB)
+dim(diamondsDB)
+
+
+diamonds <- select(diamondsDB, -c(Wholesaler))
+
+##  Replace alphabetic code to readable code in Colour variable
+
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "D","colorless")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "E","colorless")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "F","colorless")
+
+
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "G","near colorless")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "H","near colorless")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "I","near colorless")
+
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "J","faint yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "K","faint yellow")
+
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "L","very light yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "M","very light yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "N","very light yellow")
+
+
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "O","light yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "P","light yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "Q","light yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "R","light yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "S","light yellow")
+
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "T","yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "U","yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "V","yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "W","yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "X","yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "Y","yellow")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Colour", str_replace, "Z","yellow")
+
+##  Replace alphabetic code to readable code in Cut variable
+
+diamondsDB <- diamondsDB %>%
+  mutate_at("Cut", str_replace, "F","fair")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Cut", str_replace, "G","good")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Cut", str_replace, "I","ideal")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Cut", str_replace, "V","very good")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Cut", str_replace, "X","excellent")
+
+
+##  Replace alphabetic code to readable code in Polish variable
+
+diamondsDB <- diamondsDB %>%
+  mutate_at("Polish", str_replace, "F","fair")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Polish", str_replace, "G","good")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Polish", str_replace, "I","ideal")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Polish", str_replace, "V","very good")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Polish", str_replace, "X","excellent")
+
+##  Replace alphabetic code to readable code in Symmetry variable
+
+diamondsDB <- diamondsDB %>%
+  mutate_at("Symmetry", str_replace, "F","fair")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Symmetry", str_replace, "G","good")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Symmetry", str_replace, "I","ideal")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Symmetry", str_replace, "V","very good")
+diamondsDB <- diamondsDB %>%
+  mutate_at("Symmetry", str_replace, "X","excellent")
+
+
+#Categorical variables are converted to an algorithm-understandable format
+# with factor()
+
+   diamondsDB$Certification <- factor(diamondsDB$Certification)
+   diamondsDB$Cut <- factor(diamondsDB$Cut)
+   diamondsDB$Colour <- factor(diamondsDB$Colour)
+   diamondsDB$Polish <- factor(diamondsDB$Polish)
+   diamondsDB$Symmetry <- factor(diamondsDB$Symmetry)
+   
+   diamonds <- select(diamondsDB, -c(Wholesaler))
+   
+   expensive_diamonds <- filter(diamondsDB, Wholesaler < 3)
+   
+
+```
+
+
+
+
+## Training and Testing Datasets
+The diamonds dataset was used for the training and testing of the general pricing model. The dataset was randomly partitioned into two subsets, the training set, which contains 80% of the observations, and the testing set, which contains the remaining 20%. For comparison purposes, all resampling methods will use the same training and testing sets. 
+
+
+```{r Training and testing datasets, echo = FALSE, warning=FALSE }
+
+      set.seed(123)
+      diamonds_split <- initial_split(diamonds, prop = 0.80, 
+                                             strata = Price)
+      diamonds_training <- diamonds_split %>% training()
+      diamonds_test <- diamonds_split %>% testing()
+
+```
+
+
+
+### General Pricing Model
+
+The general pricing model includes variables carat, color, clarity, certification.EGL, and Symmetry.fair. This model yielded an F-statistic of 717 and an R-square of 0.9676 during the training stage (see more details in previous report).
+
+```{r Final Model 1, warning=FALSE, echo = FALSE, warning=FALSE}
+
+mdl_price_vs_5var <- lm(Price ~ Carat + Colour + Clarity + I(Certification=='EGL') + I(Symmetry=='fair'), data = diamonds_training)
+mdl_price_fit_model1 <- mdl_price_vs_5var
+summary(mdl_price_vs_5var)
+
+
+```
+
+During the testing phase on the independent set, the fitted model obtained an RMSE of 255 and an R-squared of 0.954. As expected, the latter value is a bit lower than the R-squared obtained during training stage (0.967). 
+
+
+
+
+## Resampling Methods
+In this section, I will train the regression model using three different resampling methods: $k$-fold cross validation, leaving out one cross validation, and bootstrap. The best of such techniques in terms of RMSE and R-squares will be selected for a final performance comparison with the traditional set validation approach using the independent dataset.  
+
+
+
+
+#### $k$-Fold Cross Validation 
+In this method, the sample dataset is divided into $k$ subsets, and the validation set approach is repeated $k$ times [1]. Each time, one of the $k$ subsets serves as test set and the other $k-1$ subsets are put together to form a training set. The average error in all $k$ trials is then calculated. I this assignment $k$ was set to 10, a typical choice for this parameter. As can be seen below, this method obtained an RMSE of 221.348 and an R-squared of 0.9651. The frequency of RMSE, R-squared, and MAE values ($k$=10), is presented in the plots below.
+
+```{r CV K-FOLD, warning=FALSE, echo = FALSE, warning=FALSE}
+set.seed(123)
+training_method <- trainControl(method = "cv", number = 10)
+
+cv_kfold <- train(Price ~  Carat + Colour + Clarity + I(Certification=='EGL') + I(Symmetry=='fair'), data = diamonds_training, method = "lm", trControl = training_method)
+print(cv_kfold)
+resampleHist(cv_kfold, type="hist")
+
+```
+
+
+
+
+#### Leave One Out Cross Validation (LOOCV)
+This method can be thought of as a $k$-fold cross validation taken to its logical extreme, with $k$ equal to $n$, the number of data points in the set [1]. As before the average error is computed and used to evaluate the model.  This method yielded an RMSE of 222.755 and an R-squared of 0.9641 (see below). 
+
+
+
+```{r LOOCV, warning=FALSE, echo = FALSE, warning=FALSE}
+
+set.seed(255)
+training_method <- trainControl(method = "LOOCV")
+
+loocv <- train(Price ~  Carat + Colour + Clarity + I(Certification=='EGL') + I(Symmetry=='fair'), data = diamonds_training, method = "lm", trControl = training_method, returnResamp="final")
+print(loocv)
+
+
+```
+
+
+
+
+
+#### Bootstrap
+This technique can be used to quantify the uncertainty associated with a given estimator or statistical learning method [2]. Such a technique emulates the process of obtaining a new sample set in order to estimate the variability of regression coefficients  without generating additional samples. Here I use 1,000 bootstrap estimates. The bootstrap method obtained an RMSE of 233.395 and an R-squared of 0.9613. The frequency of RMSE, R-squared, and MAE values (for 1,000 resamples), is presented in the plots below.
+
+
+```{r BOOTSTRAP, warning=FALSE, echo = FALSE, warning=FALSE}
+
+set.seed(255)
+training_method <- trainControl(method = "boot", number = 1000)
+
+bootstrap <- train(Price ~  Carat + Colour + Clarity + I(Certification=='EGL') + I(Symmetry=='fair'), data = diamonds_training, method = "lm", trControl = training_method, returnResamp="final")
+print(bootstrap)
+resampleHist(bootstrap, type="hist")
+
+
+```
+
+
+## Performance comparison between (best) resampling method and validation set approach
+
+As can be seen above, the best resampling method was $k$-fold cross-validation, which obtained the lowest RMSE as well as the highest R-squared. Now, I will compare its performance results with those yielded by the validation set approach, using the independent testing set. In assignment 1, I reported that the general pricing model obtained an RMSE of 255 and an R-squared of 0.954 on the independent set (see corresponding report), and such results were obtained using the validation set approach. 
+
+
+In case of $10$-fold cross-validation, its performance results were very similar. This method yielded an RMSE of 254.562 and an R-squared of 0.9536 on the independent set. 
+
+
+```{r Perfomance comparison, warning=FALSE, echo = TRUE}
+
+
+price_predictions <- predict(cv_kfold, newdata = diamonds_test, type="raw")
+cv_kfold_performance <- data.frame(obs = diamonds_test$Price, pred=price_predictions)
+
+defaultSummary(cv_kfold_performance, cv_kfold)
+
+
+```
+
+
+
+
+
+## Conclusions
+The best resampling method for this problem was $k$-fold cross validation. However, when compared to the traditional validation set approach, I could not appreciate any definitive advantage of the former, since both obtained really similar results. I believe that this can be due to the size of the training dataset, which is very small. The training set contains 352 observations, which might underrepresent the universe of diamond's rings. 
+
+
+## References
+
+###### [1]  Kohavi, Ron (1995). "A study of cross-validation and bootstrap for accuracy estimation and model selection". Proceedings of the Fourteenth International Joint Conference on Artificial Intelligence. San Mateo, CA: Morgan Kaufmann. 2 (12): 1137–1143.
+
+###### [2] Trevor Hastie, Robert Tibshirani, Gareth James, Daniela Witten. An Introduction to Statistical Learning with Applications in R, Springer 978-1-4614-7137-0.
