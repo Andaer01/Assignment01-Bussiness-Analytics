@@ -1,0 +1,194 @@
+---
+title: "Assignment 3B - Bank Marketing with CV and Bootstrap"
+author: "Israel Martinez"
+date: "11/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+setwd("C:/Users/ISRAEL/Documents/MQIM Program/MBA6636-Business Analytics/Assignments/Assignment 03")
+
+library("dplyr")
+library("ggplot2")
+library("caret")
+library("corrplot")
+library("FSelector")
+library("ROSE")   #  Used for imbalanced data
+library("e1071")
+library("klaR")
+library("gridExtra")
+library("Hmisc")
+library("glmnet")  ## For fitting regularized models
+```
+
+## Executive summary
+An important challenge in bank telemarketing is to predict the success of selling long-term deposits. In this problem, a telemarketing phone call is rated as successful if the client subscribes to the marketed product. We proposed a solution for this problem in assignment 2 using a logistic regression model.
+To build the model, I used the validation set approach with a 80:20 split. Now, for this assignment, I will use some resampling techniques to train the model. A comparison of their performances is reported.
+
+
+## Data Preparation
+For this assignment, I will use the cleaned version of dataset "Bank_additional_full.csv", which was originally downloaded from  <https://archive.ics.uci.edu/ml/datasets/Bank+Marketing>. All details about data preparation can be consulted in the previous Assignment's report (number 2).    
+
+
+```{r data preparation, echo=FALSE, results='hide'}
+
+#BankData <- read.csv("bank-additional-full.csv")
+
+BankData <- read.csv("https://raw.githubusercontent.com/Andaer01/Assignment01-Bussiness-Analytics/main/bank-additional-full.csv")
+
+is.na(BankData)
+
+str(BankData)
+
+#Check class imbalance on response variable "y"
+table(BankData$y)
+
+#Check classes distribution on response variable "y"
+prop.table(table(BankData$y))
+
+#Perform undersampling to balance data, each class with 4598 samples
+balanced_Bank_Data <- ovun.sample(y ~ ., data = BankData, method = "under", N = 9196, seed = 1)$data
+
+#Check balanced classes on response variable "y"
+table(balanced_Bank_Data$y)
+
+#Categorical variables are converted to an algorithm-understandable format
+# with factor()
+
+balanced_Bank_Data$job <- factor(balanced_Bank_Data$job)
+balanced_Bank_Data$marital <- factor(balanced_Bank_Data$marital)
+balanced_Bank_Data$education <- factor(balanced_Bank_Data$education)
+balanced_Bank_Data$default <- factor(balanced_Bank_Data$default)
+balanced_Bank_Data$housing <- factor(balanced_Bank_Data$housing)
+balanced_Bank_Data$loan <- factor(balanced_Bank_Data$loan)
+balanced_Bank_Data$contact <- factor(balanced_Bank_Data$contact)
+balanced_Bank_Data$month <- factor(balanced_Bank_Data$month)
+balanced_Bank_Data$day_of_week <- factor(balanced_Bank_Data$day_of_week)
+balanced_Bank_Data$poutcome <- factor(balanced_Bank_Data$poutcome)
+
+
+
+
+```
+
+
+ 
+
+```{r feature selection - information gain, echo=FALSE}
+
+# Subsetting the data and selecting only required variables
+final_Bank_Data <- balanced_Bank_Data[, c("month", "pdays", "previous", "poutcome", "cons.price.idx", "cons.conf.idx", "euribor3m", "y")]
+
+```
+
+## Training and Testing Datasets
+The dataset was randomly partitioned into two subsets, the training set, which contains 80% of the observations, and the testing set, which contains the remaining 20%. For comparison purposes, the training set will be used in all resampling methods. 
+
+
+```{r Training and testing datasets, echo = FALSE }
+# Split the data into training and test set
+set.seed(123)
+training.samples <- final_Bank_Data$y %>% 
+createDataPartition(p = 0.8, list = FALSE)
+train.data  <- final_Bank_Data[training.samples, ]
+test.data <- final_Bank_Data[-training.samples, ]
+
+```
+
+
+
+
+## The logistic Regression Model 
+The proposed model considers three metric variables (cons.conf.price, euribor3m, cons.conf.idx), 2 categorical variables (month and poutcome), and all interactions of type metric_variable:categorical_variable. This model was tested on the independent dataset, obtaining an accuracy of 0.7378, a sensitivity of 0.8433, and specificity of 0.6322 (see previous report (assignment 2)).
+
+
+```{r Model 5, warning=FALSE, echo = FALSE}
+model_5 <- glm(formula = y ~ cons.price.idx + cons.conf.idx + month + euribor3m + poutcome
+               + cons.price.idx:poutcome + euribor3m:poutcome + cons.conf.idx:poutcome + 
+               + cons.price.idx:month + euribor3m:month + cons.conf.idx:month + month:poutcome
+               + 0, data = train.data, family = binomial)
+summary(model_5)
+
+```
+
+
+
+## Resampling Methods
+In this section, I will train the classification model using three different resampling methods: $k$-fold cross validation, leaving out one cross validation, and bootstrap. The best of such techniques in terms of RMSE and R-squares will be selected for a final performance comparison with the traditional set validation approach using the independent dataset.
+
+
+#### $k$-Fold Cross Validation 
+In this method, the sample dataset is divided into $k$ subsets, and the validation set approach is repeated $k$ times [1]. Each time, one of the $k$ subsets serves as test set and the other $k-1$ subsets are put together to form a training set. The average error in all $k$ trials is then calculated. I this assignment $k$ was set to 10, a typical choice for this parameter. As can be seen below, this method obtained an average accuracy of 0.7416 and an average Kappa value of 0.4832. The latter metric is not of relevance in our case, since our dataset was balanced during data preparation.
+
+
+
+```{r CV K-FOLD, echo = TRUE, warning=FALSE}
+set.seed(123)
+training_method <- trainControl(method = "cv", number = 10)
+
+cv_kfold <- train(factor(y) ~ cons.price.idx + cons.conf.idx + month + euribor3m + poutcome+ cons.price.idx:poutcome + euribor3m:poutcome + cons.conf.idx:poutcome  + cons.price.idx:month + euribor3m:month + cons.conf.idx:month + month:poutcome, data = train.data, family = binomial, method = "glm", trControl = training_method)
+
+print(cv_kfold)
+
+
+```
+
+
+#### Leave One Out Cross Validation (LOOCV)
+
+This method was not implemented because of runtime limitations (it resulted impractical due to the large number of observations in dataset).
+
+
+
+#### Bootstrap
+This technique can be used to quantify the uncertainty associated with a given estimator or statistical learning method [2]. Such a technique emulates the process of obtaining a new sample set in order to estimate the variability of regression coefficients  without generating additional samples. Here I use 100 bootstrap estimates. The bootstrap method obtained an accuracy of 0.7368 and a Kappa value of 0.4738. As mentioned above, Kappa metric is not relevant for this model since I balanced the dataset during data preparation (see previous report of assignment 2).
+
+
+```{r BOOTSTRAP, echo = TRUE, warning=FALSE}
+
+set.seed(255)
+training_method <- trainControl(method = "boot", number=100)
+
+bootstrap <- train(factor(y) ~ cons.price.idx + cons.conf.idx + month + euribor3m + poutcome+ cons.price.idx:poutcome + euribor3m:poutcome + cons.conf.idx:poutcome  + cons.price.idx:month + euribor3m:month + cons.conf.idx:month + month:poutcome, data = train.data, family = binomial, method = "glm", trControl = training_method)
+
+print(bootstrap)
+
+
+```
+
+
+
+
+```{r Perfomance cv_kfold, warning=FALSE, echo = FALSE}
+
+
+y_predictions <- predict(cv_kfold, newdata = test.data)
+cv_kfold_performance <- data.frame(obs = test.data$y, pred=y_predictions)
+
+confusionMatrix(factor(y_predictions), factor(test.data$y))
+
+table <- data.frame(confusionMatrix(factor(y_predictions), factor(test.data$y))$table)
+
+plotTable <- table %>%
+  mutate(goodbad = ifelse(table$Prediction == table$Reference, "good", "bad")) %>%
+  group_by(Reference) 
+
+ggplot(data = plotTable, mapping = aes(x = Reference, y = Prediction, fill = goodbad)) +
+  geom_tile() +
+  geom_text(aes(label = Freq), vjust = .5, fontface  = "bold", alpha = 1) +
+  scale_fill_manual(values = c(good = "green", bad = "red")) +
+  theme_bw() +
+  xlim(rev(levels(table$Reference)))
+
+
+```
+
+
+## Conclusions
+The proposed logistic regression model achieved a slightly better accuracy with 10-fold cross-validation. With regard to the "Leave one Out Cross Validation" method, it took to long time to compile, so it was discarded. The bootstrap method resulted also
+a bit slow. I first run it with 1000 resamples as input parameter, but the process also took so long to be completed, so I changed the parameter to 100 resamples. In general, I believe the best method is $k$-fold cross validation. I found several technical incoveniences with R. For example, I could not implement all methods with a single package. 
+
+
+
+
